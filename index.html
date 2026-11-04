@@ -169,6 +169,8 @@ nav.tabs button.on{color:var(--amber)}
 #toast.bad{border-color:#5b2c28;color:#ffc2b9}
 #toast.good{border-color:#2f5a43;color:#c4f2d6}
 
+#iBody ol{padding-left:20px;margin:8px 0}#iBody li{margin:4px 0}
+
 </style>
 </head>
 <body>
@@ -439,6 +441,17 @@ nav.tabs button.on{color:var(--amber)}
   </div>
 </div>
 
+<div class="sheet" id="shInfo" role="dialog" aria-modal="true" aria-labelledby="iTitle">
+  <div class="grab"></div>
+  <h2 id="iTitle">Caméra</h2>
+  <div id="iBody"></div>
+  <div class="acts">
+    <button class="btn primary" type="button" id="iRetry">Réessayer</button>
+    <button class="btn" type="button" id="iPhoto">Éclairer avec une photo</button>
+    <button class="btn" type="button" data-close>Fermer</button>
+  </div>
+</div>
+
 <div class="sheet" id="shSim" role="dialog" aria-modal="true" aria-labelledby="simTitle">
   <div class="grab"></div>
   <h2 id="simTitle">Mode test</h2>
@@ -493,7 +506,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
 'use strict';
 /* GéoTorche : des fichiers cachés dans le monde réel.
    Tout fonctionne sur l'appareil : rien n'est envoyé sur internet. */
-const APP_VERSION = '1.1.0';
+const APP_VERSION = '1.1.1';
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
 const te = new TextEncoder();
@@ -1067,15 +1080,35 @@ const Cam = {
   async start(video) {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error('Caméra indisponible ici.');
     this.stop(); const tok = this.tok;
-    const st = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } } });
-    const cancelled = () => { const e = new Error('annulé'); e.name = 'Cancelled'; return e; };
+    const named = (name, msg) => { const e = new Error(msg || name); e.name = name; return e; };
+    const cancelled = () => named('Cancelled', 'annulé');
+    // Du plus précis au plus simple : certains téléphones refusent les réglages détaillés.
+    const tries = [
+      { audio: false, video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } } },
+      { audio: false, video: { facingMode: 'environment' } },
+      { audio: false, video: true }
+    ];
+    let st = null, last = null;
+    for (const c of tries) {
+      const p = navigator.mediaDevices.getUserMedia(c);
+      try {
+        st = await Promise.race([p, sleep(25000).then(() => { throw named('TimeoutError', 'délai'); })]);
+        break;
+      } catch (e) {
+        last = e;
+        if (e && e.name === 'TimeoutError') p.then(x => x.getTracks().forEach(t => t.stop())).catch(() => { });
+        if (!e || ['NotAllowedError', 'SecurityError', 'TimeoutError'].includes(e.name) || tok !== this.tok) break;
+      }
+    }
+    if (!st) throw last || named('NotFoundError');
     if (tok !== this.tok) { st.getTracks().forEach(t => t.stop()); throw cancelled(); }
     this.stream = st; this.track = st.getVideoTracks()[0];
     if (this.track) this.track.addEventListener('ended', () => { if (tok === this.tok && this.onEnded) this.onEnded(); });
     video.srcObject = st; video.muted = true; video.setAttribute('playsinline', '');
-    try { await video.play(); } catch (e) { /* lecture auto */ }
-    for (let i = 0; i < 40 && !video.videoWidth && tok === this.tok; i++) await sleep(50);
+    try { await Promise.race([video.play(), sleep(3000)]); } catch (e) { /* lecture auto */ }
+    for (let i = 0; i < 60 && !video.videoWidth && tok === this.tok; i++) await sleep(50);
     if (tok !== this.tok) throw cancelled();
+    if (!video.videoWidth) { this.stop(); throw named('NotReadableError', 'aucune image'); }
     return true;
   },
   canLamp() { try { const c = this.track && this.track.getCapabilities && this.track.getCapabilities(); return !!(c && c.torch); } catch (e) { return false; } },
@@ -1371,21 +1404,47 @@ async function cellTick() {
 }
 
 function clearStill() { if (S.still) { URL.revokeObjectURL(S.still); S.still = null; } const i = $('#still'); i.hidden = true; i.removeAttribute('src'); }
+const CAM_HELP = {
+  NotAllowedError: ['La caméra est bloquée', 'La caméra a été refusée pour ce site.<ol><li>Touchez le <b>cadenas</b> à gauche de l\'adresse, en haut.</li><li>Ouvrez <b>Autorisations</b> (ou <b>Paramètres du site</b>), puis <b>Caméra</b>, et choisissez <b>Autoriser</b>.</li><li>Rechargez la page, puis rallumez la torche.</li></ol>Si rien ne change, vérifiez que Chrome a lui-même le droit d\'utiliser la caméra : <b>Paramètres du téléphone</b>, <b>Applications</b>, <b>Chrome</b>, <b>Autorisations</b>, <b>Appareil photo</b>.'],
+  NotReadableError: ['La caméra est occupée', 'Une autre application utilise sans doute la caméra (appareil photo, appel vidéo, WhatsApp, lampe de poche). Fermez-la complètement, puis réessayez. Si cela continue, redémarrez Chrome.'],
+  TimeoutError: ['Pas de réponse de la caméra', 'Le téléphone n\'a pas répondu. Une demande d\'autorisation attend peut-être en bas de l\'écran ou dans la barre d\'adresse : acceptez-la, puis réessayez. Sinon, fermez les autres applications qui utilisent la caméra.'],
+  NotFoundError: ['Aucune caméra trouvée', 'Le navigateur ne trouve pas de caméra sur cet appareil.'],
+  SecurityError: ['Caméra interdite ici', 'Cette page ne peut pas utiliser la caméra. Ouvrez l\'adresse sécurisée de l\'application (https) dans Chrome.']
+};
+function camHelp(name) {
+  const k = name === 'TrackStartError' || name === 'AbortError' ? 'NotReadableError' : name === 'OverconstrainedError' ? 'NotFoundError' : name === 'PermissionDeniedError' ? 'NotAllowedError' : name;
+  const h = CAM_HELP[k] || ['Caméra indisponible', 'La caméra n\'a pas pu démarrer (' + esc(name || 'erreur inconnue') + ').'];
+  $('#iTitle').textContent = h[0];
+  $('#iBody').innerHTML = '<div class="small">' + h[1] + '</div><p class="note">En attendant, « Éclairer avec une photo » fonctionne sans la caméra en direct.</p>';
+  openSheet('shInfo');
+}
+let lampHinted = false;
 async function torchOn() {
-  const btn = $('#btnTorch'); btn.disabled = true;
-  Geo.start(); await Compass.start();
+  const btn = $('#btnTorch'); if (btn.disabled) return;
+  btn.disabled = true; btn.textContent = 'Démarrage de la caméra…';
+  Geo.start(); try { await Promise.race([Compass.start(), sleep(5000)]); } catch (e) { }
   clearStill();
+  let perm = null;
+  try { if (navigator.permissions && navigator.permissions.query) perm = (await navigator.permissions.query({ name: 'camera' })).state; } catch (e) { }
+  const ask = setTimeout(() => toast('Autorisez la caméra si le téléphone le demande.'), perm === 'granted' ? 6000 : 1200);
   try {
+    if (perm === 'denied') { const e = new Error('refus'); e.name = 'NotAllowedError'; throw e; }
     await Cam.start($('#vid'));
     if (S.view !== 'torche') { Cam.stop(); return; }
-    S.torchOn = true; btn.textContent = 'Éteindre la torche'; $('#btnLamp').hidden = !Cam.canLamp();
+    S.torchOn = true; btn.textContent = 'Éteindre la torche';
+    const lamp = Cam.canLamp(); $('#btnLamp').hidden = !lamp;
+    if (lamp && !lampHinted) { lampHinted = true; setTimeout(() => toast('La torche, c\'est la caméra. Pour éclairer une pièce sombre, touchez « Lampe ».'), 900); }
     Cam.onEnded = () => { torchOff(); toast('La caméra a été interrompue.'); };
   } catch (e) {
     S.torchOn = false;
     if (e && e.name === 'Cancelled') return;
-    toast(e && e.name === 'NotAllowedError' ? 'Caméra refusée. Autorisez-la, ou utilisez « Éclairer avec une photo ».' : 'Caméra indisponible ici. Utilisez « Éclairer avec une photo ».', 'bad');
-    if (IN_FRAME) sensorsBlocked();
-  } finally { btn.disabled = false; resizeStage(); }
+    if (IN_FRAME) { toast('Caméra bloquée dans cet aperçu. Utilisez « Éclairer avec une photo ».', 'bad'); sensorsBlocked(); }
+    else camHelp(e && e.name);
+  } finally {
+    clearTimeout(ask); btn.disabled = false;
+    if (!S.torchOn) btn.textContent = 'Allumer la torche';
+    resizeStage();
+  }
 }
 function torchOff() { Cam.stop(); Cam.onEnded = null; S.torchOn = false; $('#vid').srcObject = null; $('#btnTorch').textContent = 'Allumer la torche'; $('#btnLamp').hidden = true; }
 async function photoLight(file) {
@@ -1810,6 +1869,8 @@ function bind() {
   $('#btnSim').addEventListener('click', openSim); $('#aSim').addEventListener('click', openSim);
   $('#target').addEventListener('change', e => { S.activeId = e.target.value; LS.set('active', S.activeId); lastHint = ''; });
   $('#btnTorch').addEventListener('click', () => (S.torchOn ? torchOff() : torchOn()));
+  $('#iRetry').addEventListener('click', () => { closeSheets(); torchOn(); });
+  $('#iPhoto').addEventListener('click', () => { closeSheets(); $('#photoIn').click(); });
   $('#btnPhoto').addEventListener('click', () => $('#photoIn').click());
   $('#photoIn').addEventListener('change', e => { photoLight(e.target.files[0]); e.target.value = ''; });
   $('#btnLamp').addEventListener('click', async () => { const ok = await Cam.setLamp(!Cam.lamp); $('#btnLamp').textContent = Cam.lamp ? 'Lampe allumée' : 'Lampe'; if (!ok) toast('Lampe non disponible.'); });
