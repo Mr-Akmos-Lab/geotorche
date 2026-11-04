@@ -155,3 +155,5 @@ nav.tabs button.on{color:var(--amber)}
 #toast.show{opacity:1;transform:translate(-50%,0)}
 #toast.bad{border-color:#5b2c28;color:#ffc2b9}
 #toast.good{border-color:#2f5a43;color:#c4f2d6}
+
+#iBody ol{padding-left:20px;margin:8px 0}#iBody li{margin:4px 0}
