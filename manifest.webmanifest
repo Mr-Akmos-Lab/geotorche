@@ -21,5 +21,27 @@
    "type": "image/png",
    "purpose": "any maskable"
   }
- ]
+ ],
+ "share_target": {
+  "action": "./partage",
+  "method": "POST",
+  "enctype": "multipart/form-data",
+  "params": {
+   "title": "title",
+   "text": "text",
+   "files": [
+    {
+     "name": "capsule",
+     "accept": [
+      "text/plain",
+      ".txt",
+      ".gtch",
+      ".json",
+      "application/json",
+      "application/octet-stream"
+     ]
+    }
+   ]
+  }
+ }
 }

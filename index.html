@@ -7,6 +7,7 @@
 <meta name="theme-color" content="#0c0d10">
 <meta name="description" content="GéoTorche : cachez un fichier dans un lieu réel. Il ne s'ouvre que sur place, éclairé par la torche, avec le mot de passe.">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
 <title>GéoTorche</title>
@@ -318,7 +319,7 @@ nav.tabs button.on{color:var(--amber)}
     <div class="card">
       <h3>Retrouver</h3>
       <ol>
-        <li>Importez la cachette reçue (onglet Cachettes), puis touchez <b>Chercher</b>.</li>
+        <li>Importez la cachette reçue : onglet Cachettes, <b>Importer</b>. Si l'application est installée, faites plutôt, dans WhatsApp, un appui long sur le fichier, puis <b>Partager</b>, <b>GéoTorche</b>. Puis touchez <b>Chercher</b>.</li>
         <li>Allumez la torche et suivez la flèche jusqu'à la zone.</li>
         <li>Balayez lentement la pièce : quand la torche passe sur l'objet, l'icône du fichier apparaît.</li>
         <li>Touchez l'icône, entrez le mot de passe : le fichier s'ouvre.</li>
@@ -419,10 +420,10 @@ nav.tabs button.on{color:var(--amber)}
 <div class="sheet" id="shShare" role="dialog" aria-modal="true" aria-labelledby="sTitle">
   <div class="grab"></div>
   <h2 id="sTitle">Partager</h2>
-  <p class="small mute">Envoyez le fichier de la cachette et ce texte. Donnez le mot de passe par un autre moyen (appel, SMS séparé).</p>
+  <p class="small mute">« Envoyer » fait partir ensemble le fichier de la cachette et ce message (WhatsApp, e-mail, Bluetooth…). Donnez le mot de passe par un autre moyen (appel, SMS séparé).</p>
   <textarea id="sText" rows="7" readonly></textarea>
   <div class="acts">
-    <button class="btn primary" type="button" id="sFile">Envoyer le fichier de la cachette</button>
+    <button class="btn primary" type="button" id="sFile">Envoyer la cachette et le message</button>
     <button class="btn" type="button" id="sCopy">Copier le texte</button>
     <button class="btn" type="button" id="sLink" hidden>Copier un lien d'ouverture</button>
     <button class="btn" type="button" id="sTag" hidden>Revoir l'étiquette QR</button>
@@ -506,13 +507,16 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
 'use strict';
 /* GéoTorche : des fichiers cachés dans le monde réel.
    Tout fonctionne sur l'appareil : rien n'est envoyé sur internet. */
-const APP_VERSION = '1.1.1';
+const APP_VERSION = '1.2.0';
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
 const te = new TextEncoder();
 const td = new TextDecoder();
 const IN_FRAME = (() => { try { return window.self !== window.top; } catch (e) { return true; } })();
-const HOSTED = !IN_FRAME && window.isSecureContext && location.protocol === 'https:';
+const LOCAL_DEV = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+const HOSTED = !IN_FRAME && window.isSecureContext && (location.protocol === 'https:' || LOCAL_DEV);
+// Adresse publique de l'application, citée dans les messages de partage
+const APP_URL = HOSTED && !LOCAL_DEV ? location.origin + location.pathname.replace(/index\.html$/, '') : 'https://mr-akmos-lab.github.io/geotorche/';
 
 /* ============================== Utilitaires ============================== */
 function b64enc(u8) { let s = ''; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return btoa(s); }
@@ -770,7 +774,11 @@ function validateMeta(meta) {
 function parseCapsule(bytes) {
   let u = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
   // version enregistrée depuis l'aperçu : JSON {"geotorche":1,"data":"<base64>"}
-  if (u.length && u[0] === 0x7b) { try { const j = JSON.parse(td.decode(u)); if (j && j.geotorche === 1 && typeof j.data === 'string') u = b64dec(j.data); } catch (e) { /* pas du JSON */ } }
+  // enveloppe texte (.txt ou .json) : {"geotorche":1,"data":"<base64>"}
+  if (u.length && !(u[0] === 0x47 && u[1] === 0x54)) {
+    const t = td.decode(u.subarray(0, Math.min(u.length, 64))).replace(/^\ufeff/, '').trimStart();
+    if (t[0] === '{') { try { const j = JSON.parse(td.decode(u).replace(/^\ufeff/, '')); if (j && j.geotorche === 1 && typeof j.data === 'string') u = b64dec(j.data.replace(/\s+/g, '')); } catch (e) { /* pas du JSON */ } }
+  }
   if (u.length < 9 || td.decode(u.subarray(0, 4)) !== 'GTCH') throw new Error("Ce fichier n'est pas une cachette GéoTorche.");
   if (u[4] !== 1) throw new Error('Version de cachette inconnue : mettez à jour GéoTorche.');
   const n = rdU32(u, 5); if (n > 2000000 || 9 + n > u.length) throw new Error('Cachette incomplète ou trop grosse.');
@@ -1602,7 +1610,9 @@ function shareText(m) {
   if (P.mode === 'visible') { L.push('Lieu : ' + P.lat.toFixed(6) + ', ' + P.lon.toFixed(6) + ' (rayon ' + P.radius + ' m)'); L.push('Carte : https://maps.google.com/?q=' + P.lat.toFixed(6) + ',' + P.lon.toFixed(6)); }
   else L.push('Zone : autour de ' + P.lat.toFixed(4) + ', ' + P.lon.toFixed(4) + ' (environ ' + P.radius + ' m). L\'endroit exact est à trouver.');
   if (m.hint) L.push('Indice : ' + m.hint);
-  L.push('Ouvre le fichier joint avec GéoTorche, va sur place et éclaire avec la torche.');
+  L.push('1. Ouvre GéoTorche : ' + APP_URL);
+  L.push('2. Importe le fichier joint : onglet Cachettes, puis Importer (ou, dans WhatsApp : appui long sur le fichier, Partager, GéoTorche). Ne l\'ouvre pas directement, il est chiffré.');
+  L.push('3. Va sur place, allume la torche et touche l\'icône.');
   if (m.pw) L.push('Je te donne le mot de passe à part.');
   return L.join('\n');
 }
@@ -1614,18 +1624,23 @@ function openShare(id) {
   $('#sTag').hidden = !(c.own && c.own.tag);
   openSheet('shShare');
 }
+/* La cachette voyage dans un fichier texte (.txt) : c'est un format que le menu Partager
+   d'Android accepte, contrairement au .gtch. Le contenu reste chiffré. */
+function capsuleTextBlob(c) {
+  return new Blob([JSON.stringify({ geotorche: 1, app: APP_URL, label: c.meta.label, data: b64enc(serialize(c.meta, c.ct)) })], { type: 'text/plain' });
+}
 async function shareFile() {
   const c = capById(shareId); if (!c) return;
-  const bytes = serialize(c.meta, c.ct), name = slug(c.meta.label) + '.gtch';
-  if (IN_FRAME) { // l'aperçu n'accepte que certaines extensions : on enveloppe la cachette dans un .json
-    offerFile(new Blob([JSON.stringify({ geotorche: 1, label: c.meta.label, data: b64enc(bytes) })], { type: 'application/json' }), slug(c.meta.label) + '.geotorche.json');
-    return;
-  }
+  const name = slug(c.meta.label) + '.geotorche.txt', blob = capsuleTextBlob(c), text = shareText(c.meta);
+  if (IN_FRAME) { offerFile(blob, name); return; }
   try {
-    const file = new File([bytes], name, { type: 'application/octet-stream' });
-    if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: 'GéoTorche : ' + c.meta.label, text: shareText(c.meta) }); return; }
+    const file = new File([blob], name, { type: 'text/plain' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], title: 'GéoTorche : ' + c.meta.label, text });
+      toast('Envoyé. Donnez le mot de passe à part.', 'good'); return;
+    }
   } catch (e) { if (e && e.name === 'AbortError') return; }
-  if (await offerFile(new Blob([bytes], { type: 'application/octet-stream' }), name)) toast('Fichier « ' + name + ' » enregistré dans Téléchargements. Dans WhatsApp : Joindre, puis Document.', 'good');
+  if (await offerFile(blob, name)) { copyText(text); toast('Fichier « ' + name + ' » enregistré dans Téléchargements, message copié. Dans WhatsApp : collez le message, puis Joindre, Document.', 'good'); }
 }
 async function copyText(t) {
   try { await navigator.clipboard.writeText(t); toast('Copié.', 'good'); }
@@ -1643,6 +1658,22 @@ async function importFiles(list) {
   for (const f of list) { try { await importBytes(new Uint8Array(await f.arrayBuffer()), list.length > 1); n++; } catch (e) { toast(f.name + ' : ' + e.message, 'bad'); } }
   if (list.length > 1 && n) toast(n + ' cachette(s) importée(s).', 'good');
   renderList();
+}
+
+/* Fichiers reçus par « Partager > GéoTorche » : le service worker les a déposés dans un cache. */
+async function importShared() {
+  let n = 0, last = null;
+  try {
+    const cache = await caches.open('geotorche-partage');
+    for (const req of await cache.keys()) {
+      try { const r = await cache.match(req); last = await importBytes(new Uint8Array(await r.arrayBuffer()), true); n++; }
+      catch (e) { toast('Fichier reçu illisible : ' + e.message, 'bad'); }
+      await cache.delete(req);
+    }
+  } catch (e) { /* pas de cache */ }
+  try { history.replaceState(null, '', location.pathname); } catch (e) { }
+  if (last) { S.activeId = last.id; LS.set('active', last.id); renderTargets(); $('#target').value = last.id; toast((n > 1 ? n + ' cachettes importées' : 'Cachette importée : ' + last.label) + '. Allez sur place et allumez la torche.', 'good'); }
+  else if (!n) toast('Aucune cachette reçue.');
 }
 
 /* ============================== Liste ============================== */
@@ -1934,6 +1965,7 @@ async function init() {
   LS.del('sim');
   await loadCaps();
   if (!(await Store.persistent())) toast('Stockage indisponible ici : les cachettes seront perdues à la fermeture.', 'bad');
+  if (/[?&]partage=1/.test(location.search)) await importShared();
   if (location.hash.startsWith('#c=')) {
     try { const meta = await importBytes(unb64url(location.hash.slice(3))); S.activeId = meta.id; renderTargets(); $('#target').value = meta.id; } catch (e) { toast('Lien de cachette illisible.', 'bad'); }
     try { history.replaceState(null, '', location.pathname); } catch (e) { }
@@ -1942,7 +1974,7 @@ async function init() {
   else if (navigator.permissions && navigator.permissions.query) { try { const st = await navigator.permissions.query({ name: 'geolocation' }); if (st.state === 'granted') Geo.start(); } catch (e) { } }
   updatePills(); resizeStage(); requestAnimationFrame(loop);
   if (HOSTED && 'serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => { });
-  if (HOSTED) { const l = document.createElement('link'); l.rel = 'manifest'; l.href = 'manifest.webmanifest'; document.head.appendChild(l); }
+  if (HOSTED && !document.querySelector('link[rel=manifest]')) { const l = document.createElement('link'); l.rel = 'manifest'; l.href = 'manifest.webmanifest'; document.head.appendChild(l); }
 }
 window.GT = { parseCoords, Plus, Crypt, Cells, Vision, QR, buildCapsule, unwrapVisible, tryCells, openWithDek, serialize, parseCapsule, importBytes, Store, Geo, Compass, S, evaluate, loadCaps, capById };
 init();
