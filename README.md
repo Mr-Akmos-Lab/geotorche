@@ -5,8 +5,8 @@ Des fichiers cachés dans le monde réel. Un fichier (photo, PDF, message…) es
 ## Fonctionnement
 
 1. **Cacher** : choisir le fichier, mesurer sa position (ou coller des coordonnées), photographier l'objet, choisir un mot de passe.
-2. **Partager** : envoyer la cachette (fichier `.gtch`) et donner le mot de passe à part.
-3. **Retrouver** : importer la cachette, suivre la flèche jusqu'à la zone, balayer avec la torche. L'icône apparaît sur l'objet ; on la touche et on entre le mot de passe.
+2. **Partager** : le bouton « Envoyer » fait partir ensemble la cachette (fichier `.geotorche.txt`, chiffré) et un message qui guide le destinataire. Le mot de passe se donne à part.
+3. **Retrouver** : importer la cachette (onglet Cachettes, Importer, ou depuis WhatsApp : Partager, GéoTorche si l'application est installée), suivre la flèche jusqu'à la zone, balayer avec la torche. L'icône apparaît sur l'objet ; on la touche et on entre le mot de passe.
 
 ## Les serrures
 
