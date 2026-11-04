@@ -1,0 +1,310 @@
+<div id="app">
+<header class="top">
+  <div class="brand">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2h8l-1.5 6.5v12a1.5 1.5 0 0 1-1.5 1.5h-2a1.5 1.5 0 0 1-1.5-1.5v-12z"/><path d="M8.6 5h6.8"/><circle cx="12" cy="13" r="1"/></svg>
+    GéoTorche
+  </div>
+  <div class="pills">
+    <button class="pill" id="pGps" type="button">GPS</button>
+    <span class="pill" id="pCmp">Boussole</span>
+  </div>
+</header>
+<div id="demoBanner" class="banner" hidden></div>
+
+<main>
+  <!-- ================= TORCHE ================= -->
+  <section id="v-torche" class="view active" aria-label="Torche">
+    <div id="stage">
+      <video id="vid" playsinline muted autoplay></video>
+      <img id="still" alt="" hidden>
+      <canvas id="fx"></canvas>
+      <div class="hud-top">
+        <select id="target" aria-label="Cachette recherchée"></select>
+        <button class="pill" id="btnSim" type="button">Test</button>
+      </div>
+      <div id="hint" role="status" aria-live="polite">
+        <div class="t" id="hintT">Aucune cachette</div>
+        <div class="l" id="hintL">Cachez un fichier (onglet Cacher) ou importez une cachette reçue (onglet Cachettes).</div>
+        <div class="meter" id="hintM" hidden><i></i></div>
+        <div class="row" id="hintR" hidden></div>
+      </div>
+      <div class="hud-bottom">
+        <button id="btnTorch" class="btn primary big" type="button">Allumer la torche</button>
+        <div class="row">
+          <button id="btnPhoto" class="btn ghost" type="button">Éclairer avec une photo</button>
+          <button id="btnLamp" class="btn ghost" type="button" hidden>Lampe</button>
+        </div>
+        <input type="file" id="photoIn" accept="image/*" capture="environment" hidden>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= CACHER ================= -->
+  <section id="v-cacher" class="view" aria-label="Cacher un fichier">
+    <h2>Cacher un fichier</h2>
+    <p class="mute small">Le fichier est chiffré sur ce téléphone. Il ne s'ouvrira qu'au bon endroit, éclairé par la torche, avec le mot de passe.</p>
+
+    <div class="card">
+      <h3>1. Ce que vous cachez</h3>
+      <input type="file" id="hFiles" multiple hidden>
+      <button class="btn" type="button" id="hFilesBtn" style="width:100%">Ajouter des fichiers</button>
+      <ul class="files" id="hFileList"></ul>
+      <label class="f" for="hNote">Message (facultatif)</label>
+      <textarea id="hNote" placeholder="Un mot qui s'affichera à l'ouverture"></textarea>
+    </div>
+
+    <div class="card">
+      <h3>2. Nom et indice</h3>
+      <label class="f" for="hLabel">Nom visible de la cachette</label>
+      <input id="hLabel" maxlength="80" placeholder="Ex. Recette de la sauce">
+      <label class="f" for="hHint">Indice (facultatif, visible avant l'ouverture)</label>
+      <input id="hHint" maxlength="160" placeholder="Ex. Sous le bol bleu de la cuisine">
+    </div>
+
+    <div class="card">
+      <h3>3. Le lieu</h3>
+      <div class="seg" id="hMode">
+        <button type="button" data-m="visible" class="on">Coordonnées données</button>
+        <button type="button" data-m="secret">Lieu secret</button>
+      </div>
+      <p class="note" id="hModeNote">Le destinataire reçoit les coordonnées et est guidé jusqu'au lieu.</p>
+      <div class="row" style="margin-top:10px">
+        <button class="btn" type="button" id="hMeasure">Mesurer ma position</button>
+        <button class="btn" type="button" id="hTypeBtn">Saisir des coordonnées</button>
+      </div>
+      <div id="hTypeBox" hidden>
+        <label class="f" for="hCoords">Coordonnées, lien de carte ou Plus Code</label>
+        <input id="hCoords" placeholder="7.18765, 2.06321  ou  Lat:7,18765 Long:2,06321">
+        <div class="row" style="margin-top:8px"><button class="btn sm" type="button" id="hCoordsOk">Valider</button></div>
+      </div>
+      <div id="hPosOut" class="note"></div>
+      <label class="f" for="hRadius" id="hRadiusL">Rayon d'ouverture : <b id="hRadiusV">25 m</b></label>
+      <input type="range" id="hRadius" min="5" max="300" step="5" value="25">
+      <p class="note" id="hRadiusNote">En intérieur, le GPS se trompe souvent de 10 à 40 m : gardez au moins 25 m et ajoutez la photo ou l'étiquette pour viser l'objet précis.</p>
+    </div>
+
+    <div class="card">
+      <h3>4. La torche (facultatif, recommandé)</h3>
+      <p class="small mute">Photographiez l'objet (le bol, la porte, l'arbre) depuis l'endroit où se tiendra la personne. La torche reconnaîtra la scène et l'icône apparaîtra dessus.</p>
+      <button class="btn" type="button" id="hAim">Viser l'objet</button>
+      <div class="thumbs" id="hThumbs"></div>
+      <div id="hAimOut" class="note"></div>
+      <label class="check" id="hThumbClueL" hidden><input type="checkbox" id="hThumbClue"> <span>Montrer la première photo comme indice</span></label>
+      <label class="check"><input type="checkbox" id="hTag"> <span>Exiger l'étiquette QR collée sur l'objet<br><span class="small mute">La seule vraie preuve de présence : sans l'étiquette, personne (vous compris) ne peut ouvrir.</span></span></label>
+    </div>
+
+    <div class="card">
+      <h3>5. Mot de passe</h3>
+      <input type="password" id="hPw" autocomplete="new-password" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Mot de passe">
+      <div class="strength"><i id="hPwBar"></i></div>
+      <div class="note" id="hPwNote">Au moins 8 caractères. Une phrase de 3 ou 4 mots est idéale.</div>
+      <input type="password" id="hPw2" autocomplete="new-password" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Confirmer le mot de passe" style="margin-top:8px">
+      <label class="check"><input type="checkbox" id="hShowPw"> <span>Afficher</span></label>
+      <label class="check"><input type="checkbox" id="hBurn"> <span>Effacer la cachette de l'appareil qui l'ouvre, après lecture</span></label>
+    </div>
+
+    <div id="hErr" class="err" role="alert"></div>
+    <button class="btn primary big" type="button" id="hGo">Cacher le fichier</button>
+  </section>
+
+  <!-- ================= CACHETTES ================= -->
+  <section id="v-liste" class="view" aria-label="Mes cachettes">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+      <h2>Cachettes</h2>
+      <button class="btn sm" type="button" id="lImportBtn">Importer</button>
+    </div>
+    <input type="file" id="lImport" multiple hidden>
+    <p class="mute small">Cachettes créées ici ou reçues (fichier .gtch envoyé par WhatsApp, e-mail…).</p>
+    <div id="lList"></div>
+    <div class="card">
+      <h3>Journal des ouvertures</h3>
+      <p class="small mute">Date, position et précision de chaque tentative. Utile comme trace de passage sur un site.</p>
+      <div id="jList"></div>
+      <div class="row" style="margin-top:10px">
+        <button class="btn sm" type="button" id="jCsv">Exporter (CSV)</button>
+        <button class="btn sm danger" type="button" id="jClear">Vider</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= AIDE ================= -->
+  <section id="v-aide" class="view help" aria-label="Aide">
+    <h2>Comment ça marche</h2>
+    <div class="card">
+      <h3>Cacher</h3>
+      <ol>
+        <li>Choisissez le fichier (photo, PDF, document…) et un message.</li>
+        <li>Placez-vous à l'endroit et touchez <b>Mesurer ma position</b>, ou collez des coordonnées reçues.</li>
+        <li>Touchez <b>Viser l'objet</b> et photographiez-le une à trois fois.</li>
+        <li>Choisissez un mot de passe, puis <b>Cacher le fichier</b>. Envoyez la cachette, et le mot de passe par un autre moyen.</li>
+      </ol>
+    </div>
+    <div class="card">
+      <h3>Retrouver</h3>
+      <ol>
+        <li>Importez la cachette reçue (onglet Cachettes), puis touchez <b>Chercher</b>.</li>
+        <li>Allumez la torche et suivez la flèche jusqu'à la zone.</li>
+        <li>Balayez lentement la pièce : quand la torche passe sur l'objet, l'icône du fichier apparaît.</li>
+        <li>Touchez l'icône, entrez le mot de passe : le fichier s'ouvre.</li>
+      </ol>
+    </div>
+    <div class="card">
+      <h3>Les serrures, de la plus faible à la plus forte</h3>
+      <ul>
+        <li><b>Le lieu (GPS)</b> : une porte d'entrée, pas un coffre. Une application de fausse position peut la tromper.</li>
+        <li><b>La torche</b> : la direction (boussole) et la photo de l'objet. Elle guide et révèle, mais c'est une aide visuelle.</li>
+        <li><b>Le mot de passe</b> : il chiffre réellement le fichier (AES-256). Sans lui, le contenu est illisible, même en lisant le code.</li>
+        <li><b>L'étiquette QR</b> : un secret imprimé, collé sur l'objet. Il faut l'avoir vue pour ouvrir. C'est la vraie preuve de présence.</li>
+        <li><b>Lieu secret</b> : l'endroit exact entre dans la clé de chiffrement. Pour un jeu de piste, sans guidage : la torche ne reconnaît l'endroit qu'une fois dessus. Si le mot de passe est faux, l'endroit ne sera jamais reconnu. C'est un verrou de jeu, pas un coffre-fort : quelqu'un qui a le mot de passe et un ordinateur peut essayer tous les endroits d'une zone.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Idées d'usage</h3>
+      <ul>
+        <li><b>Jeu de piste, anniversaire</b> : une suite de cachettes en lieu secret, chacune donnant l'indice de la suivante.</li>
+        <li><b>Consignes sur site</b> : une fiche ou un plan qui ne s'ouvre que sur la parcelle, le chantier ou l'entrepôt. Le journal garde la date et la position de chaque ouverture.</li>
+        <li><b>Accueil</b> : le code du portail ou du coffre à clés, lisible seulement devant la porte (avec l'étiquette collée dessus).</li>
+        <li><b>Souvenir</b> : une photo ou un message laissé à l'endroit d'un événement.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Conseils</h3>
+      <ul>
+        <li>Le GPS se trompe de 3 à 10 m dehors, souvent bien plus à l'intérieur. Mesurez près d'une fenêtre et gardez un rayon de 25 m ou plus en intérieur.</li>
+        <li>Si la flèche tourne mal, calibrez la boussole : décrivez un 8 avec le téléphone, loin des objets en métal.</li>
+        <li>Photographiez l'objet avec ce qui l'entoure (le plan de travail, le mur), en pleine lumière. Évitez les photos d'un objet uni sur fond uni.</li>
+        <li>Rien n'est envoyé sur internet : tout reste sur le téléphone, jusqu'à ce que vous partagiez la cachette.</li>
+        <li>Le contenu est chiffré, mais le nom, l'indice, la zone et une empreinte très floue de la photo restent lisibles dans le fichier de la cachette. N'y mettez rien de confidentiel.</li>
+        <li>Mot de passe : majuscules et accents comptent, les espaces au début et à la fin sont ignorés.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Installer l'application</h3>
+      <p>Caméra, GPS et boussole exigent une adresse sécurisée (https). Déposez le dossier de l'application sur un hébergement gratuit (Netlify Drop, GitHub Pages), ouvrez l'adresse dans Chrome puis <b>Ajouter à l'écran d'accueil</b>. Elle fonctionne ensuite hors connexion.</p>
+      <p class="small mute" id="envInfo"></p>
+    </div>
+    <div class="card">
+      <h3>Mode test</h3>
+      <p class="small mute">Pour essayer sans se déplacer : position et direction simulées, et une cachette d'essai prête à ouvrir.</p>
+      <button class="btn sm" type="button" id="aSim">Ouvrir le mode test</button>
+    </div>
+    <p class="small mute" style="text-align:center">GéoTorche <span id="ver"></span></p>
+  </section>
+</main>
+
+<nav class="tabs" aria-label="Navigation">
+  <button type="button" data-view="torche" class="on">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2h8l-1.5 6.5v12a1.5 1.5 0 0 1-1.5 1.5h-2a1.5 1.5 0 0 1-1.5-1.5v-12z"/><path d="M8.6 5h6.8"/></svg>Torche</button>
+  <button type="button" data-view="cacher">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z"/><path d="M12 7v6M9 10h6"/></svg>Cacher</button>
+  <button type="button" data-view="liste">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h10"/></svg>Cachettes</button>
+  <button type="button" data-view="aide">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6V14"/><path d="M12 17h.01"/></svg>Aide</button>
+</nav>
+
+<!-- ================= FEUILLES ================= -->
+<div id="backdrop"></div>
+
+<div class="sheet" id="shUnlock" role="dialog" aria-modal="true" aria-labelledby="uTitle">
+  <div class="grab"></div>
+  <h2 id="uTitle">Ouvrir</h2>
+  <div id="uHint" class="mute small"></div>
+  <ul class="checks" id="uChecks"></ul>
+  <div id="uPwBox">
+    <label class="f" for="uPw">Mot de passe</label>
+    <input type="password" id="uPw" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+  </div>
+  <div id="uErr" class="err" role="alert"></div>
+  <div class="acts">
+    <button class="btn primary big" type="button" id="uGo">Ouvrir</button>
+    <button class="btn" type="button" data-close>Annuler</button>
+  </div>
+</div>
+
+<div class="sheet viewer" id="shView" role="dialog" aria-modal="true" aria-labelledby="vTitle">
+  <div class="grab"></div>
+  <h2 id="vTitle">Fichier</h2>
+  <div id="vBody"></div>
+  <div class="acts"><button class="btn" type="button" id="vClose">Fermer</button></div>
+</div>
+
+<div class="sheet" id="shDone" role="dialog" aria-modal="true" aria-labelledby="dTitle">
+  <div class="grab"></div>
+  <h2 id="dTitle">Fichier caché</h2>
+  <div id="dBody"></div>
+  <div class="acts">
+    <button class="btn primary" type="button" id="dShare">Partager la cachette</button>
+    <button class="btn" type="button" id="dSeek">Tester avec la torche</button>
+    <button class="btn" type="button" data-close>Terminé</button>
+  </div>
+</div>
+
+<div class="sheet" id="shShare" role="dialog" aria-modal="true" aria-labelledby="sTitle">
+  <div class="grab"></div>
+  <h2 id="sTitle">Partager</h2>
+  <p class="small mute">Envoyez le fichier de la cachette et ce texte. Donnez le mot de passe par un autre moyen (appel, SMS séparé).</p>
+  <textarea id="sText" rows="7" readonly></textarea>
+  <div class="acts">
+    <button class="btn primary" type="button" id="sFile">Envoyer le fichier de la cachette</button>
+    <button class="btn" type="button" id="sCopy">Copier le texte</button>
+    <button class="btn" type="button" id="sLink" hidden>Copier un lien d'ouverture</button>
+    <button class="btn" type="button" id="sTag" hidden>Revoir l'étiquette QR</button>
+    <button class="btn" type="button" data-close>Fermer</button>
+  </div>
+</div>
+
+<div class="sheet" id="shTag" role="dialog" aria-modal="true" aria-labelledby="tTitle">
+  <div class="grab"></div>
+  <h2 id="tTitle">Étiquette à coller</h2>
+  <p class="small mute">Imprimez-la (ou recopiez-la sur papier avec une capture d'écran), puis collez-la sur l'objet, côté visible. Ne l'envoyez pas avec la cachette.</p>
+  <div class="qrbox" id="tQr"></div>
+  <div class="acts">
+    <button class="btn primary" type="button" id="tSave">Enregistrer l'image de l'étiquette</button>
+    <button class="btn" type="button" data-close>Fermer</button>
+  </div>
+</div>
+
+<div class="sheet" id="shSim" role="dialog" aria-modal="true" aria-labelledby="simTitle">
+  <div class="grab"></div>
+  <h2 id="simTitle">Mode test</h2>
+  <p class="small mute">Simule votre position et votre direction, pour essayer sans se déplacer ou quand les capteurs sont bloqués.</p>
+  <label class="f" for="simC">Position simulée</label>
+  <input id="simC" placeholder="7.18765, 2.06321">
+  <div class="row" style="margin-top:8px">
+    <button class="btn sm" type="button" id="simSet">Placer</button>
+    <button class="btn sm" type="button" id="simOnTarget">Sur la cachette</button>
+    <button class="btn sm" type="button" id="simAway">À 120 m</button>
+  </div>
+  <label class="f" for="simH">Direction simulée : <b id="simHV">non</b></label>
+  <input type="range" id="simH" min="-1" max="359" step="1" value="-1">
+  <div class="acts">
+    <button class="btn primary" type="button" id="simDemo">Créer une cachette d'essai ici</button>
+    <button class="btn" type="button" id="simOff">Revenir aux vrais capteurs</button>
+    <button class="btn" type="button" data-close>Fermer</button>
+  </div>
+</div>
+
+<div id="viseur" hidden>
+  <div class="vstage">
+    <video id="vVid" playsinline muted autoplay></video>
+    <div class="ring" id="vRing"></div>
+    <div class="vtop" id="vTop">Cadrez l'objet dans le cercle, depuis l'endroit où la personne se tiendra.</div>
+  </div>
+  <div class="vbot">
+    <button class="btn primary big" type="button" id="vShot">Prendre la photo 1 sur 3</button>
+    <div class="row">
+      <button class="btn" type="button" id="vPick">Choisir une photo</button>
+      <button class="btn" type="button" id="vDirOnly">Direction seule</button>
+    </div>
+    <div class="row">
+      <button class="btn" type="button" id="vDone">Terminer</button>
+      <button class="btn" type="button" id="vCancel">Annuler</button>
+    </div>
+    <input type="file" id="vPickIn" accept="image/*" capture="environment" hidden>
+  </div>
+</div>
+
+<div id="busy" hidden><div class="box"><div class="spin"></div><div id="busyT">Un instant…</div></div></div>
+<div id="toast" role="status" aria-live="polite"></div>
+</div>
