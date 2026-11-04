@@ -85,11 +85,11 @@ q=Image.open('${M}qr.png').convert('RGB'); bg=Image.open('${M}B.png').convert('R
   await page.selectOption('#target', sec.id); await page.waitForTimeout(400);
   const armBtn = await page.$('#hintR button'); ok('bouton « Entrer le mot de passe » pour le lieu secret', !!armBtn);
   await ctx.setGeolocation({ ...off(140, -60), accuracy: 8 }); await page.waitForTimeout(300);
-  await armBtn.click(); await page.waitForSelector('#shUnlock.open'); await page.fill('#uPw', 'faute de frappe'); await page.click('#uGo');
+  await page.click('#hintR button'); await page.waitForSelector('#shUnlock.open'); await page.fill('#uPw', 'faute de frappe'); await page.click('#uGo');
   await page.waitForTimeout(2500);
   const retry = await page.$('#hintR button'); const rt = retry ? await retry.textContent() : '';
   ok('lieu secret : mot de passe faux, on peut le ressaisir', /Ressaisir/.test(rt), rt);
-  await retry.click(); await page.waitForSelector('#shUnlock.open'); await page.fill('#uPw', 'jeu de piste 2026'); await page.click('#uGo');
+  await page.click('#hintR button'); await page.waitForSelector('#shUnlock.open'); await page.fill('#uPw', 'jeu de piste 2026'); await page.click('#uGo');
   await page.waitForTimeout(3500);
   ok('lieu secret : rien à 150 m', !(await page.evaluate(id => GT.S.ev[id].reveal, sec.id)), await page.textContent('#hintL'));
   await ctx.setGeolocation({ ...off(-4, 6), accuracy: 9 });
