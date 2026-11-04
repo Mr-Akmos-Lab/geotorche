@@ -1,0 +1,20 @@
+const { chromium } = require('playwright');
+(async () => {
+  const b = await chromium.launch(); const ctx = await b.newContext({ viewport: { width: 412, height: 860 }, deviceScaleFactor: 1, isMobile: true, hasTouch: true });
+  const top = await ctx.newPage(); const errs = [];
+  top.on('pageerror', e => errs.push(e.message));
+  await top.goto('http://localhost:8765/frame.html'); await top.waitForTimeout(1200);
+  const f = top.frame({ url: /artifact\.html/ });
+  f.on && 0;
+  await top.screenshot({ path: '/tmp/d1.png' });
+  await f.click('#btnTorch'); await top.waitForTimeout(800); await top.screenshot({ path: '/tmp/d2.png' });
+  await f.click('#btnSim'); await top.waitForTimeout(400); await top.screenshot({ path: '/tmp/d3.png' });
+  await f.click('#simDemo'); await f.waitForFunction(() => GT.S.caps.length === 1 && Object.values(GT.S.ev).some(e => e.reveal), null, { timeout: 15000 });
+  await top.waitForTimeout(500); await top.screenshot({ path: '/tmp/d4.png' });
+  const p = await f.evaluate(() => { const i = GT.S.icons[0]; return { x: i.x / devicePixelRatio, y: i.y / devicePixelRatio }; });
+  await f.click('#fx', { position: p }); await f.waitForSelector('#shUnlock.open'); await f.fill('#uPw', 'essai1234'); await f.click('#uGo');
+  await f.waitForSelector('#shView.open #vBody img', { timeout: 10000 }); await top.waitForTimeout(500); await top.screenshot({ path: '/tmp/d5.png' });
+  await f.click('#vClose'); await f.click('nav.tabs button[data-view=aide]'); await top.waitForTimeout(300); await top.screenshot({ path: '/tmp/d6.png' });
+  console.log('caps', await f.evaluate(() => GT.S.caps.length), 'idb', await f.evaluate(() => GT.Store.persistent()), 'errors', JSON.stringify(errs));
+  await b.close();
+})().catch(e => { console.error('CRASH', e.message); process.exit(1); });
