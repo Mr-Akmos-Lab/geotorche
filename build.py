@@ -47,6 +47,7 @@ CSP = ("default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 
        "object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'")
 (DIST / "artifact.html").write_text(html, encoding="utf-8")
 html = html.replace('<meta charset="utf-8">', '<meta charset="utf-8">\n<meta http-equiv="Content-Security-Policy" content="' + CSP + '">', 1)
+html = html.replace('<link rel="icon"', '<link rel="manifest" href="manifest.webmanifest">\n<link rel="icon"', 1)
 (DIST / "index.html").write_text(html, encoding="utf-8")
 
 # Icônes : carré sombre, faisceau ambre, fichier au centre
@@ -77,16 +78,35 @@ manifest = {
     "background_color": "#0c0d10", "theme_color": "#0c0d10",
     "icons": [{"src": "icon-192.png", "sizes": "192x192", "type": "image/png"},
               {"src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"}],
+    "share_target": {
+        "action": "./partage", "method": "POST", "enctype": "multipart/form-data",
+        "params": {"title": "title", "text": "text",
+                   "files": [{"name": "capsule", "accept": ["text/plain", ".txt", ".gtch", ".json", "application/json", "application/octet-stream"]}]}
+    },
 }
 (DIST / "manifest.webmanifest").write_text(json.dumps(manifest, ensure_ascii=False, indent=1), encoding="utf-8")
 
 sw = """// GéoTorche : fonctionnement hors connexion
-const C = 'geotorche-v2';
+const C = 'geotorche-v3';
 const FILES = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(C).then(c => c.addAll(FILES)).then(() => self.skipWaiting())); });
-self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(k => Promise.all(k.filter(x => x !== C).map(x => caches.delete(x)))).then(() => self.clients.claim())); });
+self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(k => Promise.all(k.filter(x => x !== C && x !== 'geotorche-partage').map(x => caches.delete(x)))).then(() => self.clients.claim())); });
 self.addEventListener('fetch', e => {
-  if (e.request.method !== 'GET' || new URL(e.request.url).origin !== location.origin) return;
+  const u = new URL(e.request.url);
+  // « Partager > GéoTorche » depuis WhatsApp : on garde le fichier reçu, puis on ouvre l'application
+  if (e.request.method === 'POST' && u.origin === location.origin && u.pathname.endsWith('/partage')) {
+    e.respondWith((async () => {
+      try {
+        const fd = await e.request.formData();
+        const cache = await caches.open('geotorche-partage');
+        let i = 0;
+        for (const f of fd.getAll('capsule')) if (f && typeof f !== 'string') await cache.put(new URL('partage-recu-' + Date.now() + '-' + (i++), self.registration.scope).href, new Response(f));
+      } catch (err) { /* rien reçu */ }
+      return Response.redirect(new URL('./?partage=1', self.registration.scope).href, 303);
+    })());
+    return;
+  }
+  if (e.request.method !== 'GET' || u.origin !== location.origin) return;
   e.respondWith(fetch(e.request).then(r => { const copy = r.clone(); caches.open(C).then(c => c.put(e.request, copy)); return r; }).catch(() => caches.match(e.request, { ignoreSearch: true }).then(r => r || caches.match('./index.html'))));
 });
 """
